@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.nguyenhuuquang.hotelmanagement.entity.Service;
 
 public interface ServiceService {
+
     Service createService(Service service);
 
     Service updateService(Long id, Service service);
@@ -14,11 +15,11 @@ public interface ServiceService {
 
     Optional<Service> getServiceById(Long id);
 
+    Optional<Service> getServiceByName(String name);
+
     List<Service> getAllServices();
 
-    List<Service> getServicesByCategory(String category);
+    List<Service> getActiveServices();
 
-    List<Service> getAvailableServices();
-
-    List<Service> searchServicesByName(String name);
+    Service updateServiceStatus(Long id, Boolean isActive);
 }

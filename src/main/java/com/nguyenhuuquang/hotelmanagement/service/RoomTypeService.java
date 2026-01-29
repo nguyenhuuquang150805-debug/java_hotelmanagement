@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.nguyenhuuquang.hotelmanagement.entity.RoomType;
 
 public interface RoomTypeService {
+
     RoomType createRoomType(RoomType roomType);
 
     RoomType updateRoomType(Long id, RoomType roomType);
@@ -14,7 +15,7 @@ public interface RoomTypeService {
 
     Optional<RoomType> getRoomTypeById(Long id);
 
-    Optional<RoomType> getRoomTypeByName(String typeName);
+    Optional<RoomType> getRoomTypeByName(String name);
 
     List<RoomType> getAllRoomTypes();
 

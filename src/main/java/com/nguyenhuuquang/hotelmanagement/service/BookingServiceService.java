@@ -1,18 +1,16 @@
 package com.nguyenhuuquang.hotelmanagement.service;
 
 import java.util.List;
-import java.util.Optional;
 
 import com.nguyenhuuquang.hotelmanagement.entity.BookingService;
 
 public interface BookingServiceService {
-    BookingService createBookingService(BookingService bookingService);
 
-    BookingService updateBookingService(Long id, BookingService bookingService);
+    BookingService addServiceToBooking(Long bookingId, Long serviceId, Integer quantity);
 
-    void deleteBookingService(Long id);
+    void removeServiceFromBooking(Long bookingServiceId);
 
-    Optional<BookingService> getBookingServiceById(Long id);
+    BookingService getBookingServiceById(Long id);
 
     List<BookingService> getAllBookingServices();
 

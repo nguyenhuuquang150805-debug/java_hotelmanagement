@@ -1,36 +1,26 @@
 package com.nguyenhuuquang.hotelmanagement.service;
 
-import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
+import com.nguyenhuuquang.hotelmanagement.dto.request.CreateBookingRequest;
 import com.nguyenhuuquang.hotelmanagement.entity.Booking;
 import com.nguyenhuuquang.hotelmanagement.entity.enums.BookingStatus;
 
 public interface BookingService {
-    Booking createBooking(Booking booking);
 
-    Booking createBookingWithValidation(Booking booking);
+    Booking createBooking(CreateBookingRequest request, Long userId);
 
-    Booking updateBooking(Long id, Booking booking);
+    Booking getBookingById(Long id);
 
-    void deleteBooking(Long id);
+    List<Booking> getUserBookings(Long userId);
 
-    Optional<Booking> getBookingById(Long id);
-
-    Optional<Booking> getBookingByCode(String bookingCode);
-
-    List<Booking> getAllBookings();
-
-    List<Booking> getBookingsByCustomerId(Long customerId);
-
-    List<Booking> getBookingsByStatus(BookingStatus status);
-
-    List<Booking> getBookingsByDateRange(LocalDate start, LocalDate end);
+    List<Booking> getRoomBookings(Long roomId);
 
     Booking updateBookingStatus(Long id, BookingStatus status);
 
-    boolean checkRoomAvailability(Long roomId, LocalDate checkIn, LocalDate checkOut);
+    void cancelBooking(Long id, String reason);
 
-    List<Long> getOccupiedRoomIds(List<Long> roomIds, LocalDate checkIn, LocalDate checkOut);
+    Booking checkIn(Long id);
+
+    Booking checkOut(Long id);
 }

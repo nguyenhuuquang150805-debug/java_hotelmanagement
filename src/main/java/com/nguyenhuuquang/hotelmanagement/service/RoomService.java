@@ -2,47 +2,33 @@ package com.nguyenhuuquang.hotelmanagement.service;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
+import com.nguyenhuuquang.hotelmanagement.dto.request.CreateRoomRequest;
+import com.nguyenhuuquang.hotelmanagement.dto.request.RoomSearchRequest;
+import com.nguyenhuuquang.hotelmanagement.dto.request.UpdateRoomRequest;
+import com.nguyenhuuquang.hotelmanagement.dto.response.RoomResponse;
 import com.nguyenhuuquang.hotelmanagement.entity.Room;
 import com.nguyenhuuquang.hotelmanagement.entity.enums.RoomStatus;
 
 public interface RoomService {
-    Room createRoom(Room room);
 
-    Room updateRoom(Long id, Room room);
+    RoomResponse createRoom(CreateRoomRequest request);
+
+    RoomResponse updateRoom(Long id, UpdateRoomRequest request);
 
     void deleteRoom(Long id);
 
-    Optional<Room> getRoomById(Long id);
+    RoomResponse getRoomById(Long id);
 
-    Optional<Room> getRoomByNumber(String roomNumber);
+    List<RoomResponse> getAllRooms();
 
-    List<Room> getAllRooms();
+    List<RoomResponse> getRoomsByStatus(RoomStatus status);
 
-    List<Room> getRoomsByTypeId(Long roomTypeId);
+    List<RoomResponse> searchAvailableRooms(RoomSearchRequest request);
 
-    List<Room> getRoomsByStatus(RoomStatus status);
+    boolean isRoomAvailable(Long roomId, LocalDate checkInDate, LocalDate checkOutDate);
 
-    List<Room> getRoomsByFloor(Integer floorNumber);
+    RoomResponse updateRoomStatus(Long id, RoomStatus status);
 
-    Room updateRoomStatus(Long id, RoomStatus status);
-
-    // truy vấn phức tạp
-    List<Room> findAvailableRooms(LocalDate checkIn, LocalDate checkOut);
-
-    List<Object[]> getRoomStatistics();
-
-    List<Room> searchRooms(Long typeId, Integer floor, Double minRating);
-
-    List<Object[]> getTopBookedRooms();
-
-    List<Object[]> getRoomsByPriceRange();
-
-    List<Object[]> getRoomTypesByRating(Double minAvgRating);
-
-    List<Room> findUnbookedRoomsInPeriod(LocalDate startDate, LocalDate endDate);
-
-    List<Object[]> getFloorStatistics();
-
+    Room findRoomEntityById(Long id);
 }

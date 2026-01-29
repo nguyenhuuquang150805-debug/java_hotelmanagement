@@ -1,5 +1,6 @@
 package com.nguyenhuuquang.hotelmanagement.repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -14,96 +15,73 @@ import com.nguyenhuuquang.hotelmanagement.entity.enums.RoomStatus;
 
 @Repository
 public interface RoomRepository extends JpaRepository<Room, Long> {
-    Optional<Room> findByRoomNumber(String roomNumber);
 
-    List<Room> findByRoomTypeId(Long roomTypeId);
+        Optional<Room> findByRoomNumber(String roomNumber);
 
-    List<Room> findByStatus(RoomStatus status);
+        boolean existsByRoomNumber(String roomNumber);
 
-    List<Room> findByFloorNumber(Integer floorNumber);
+        List<Room> findByStatus(RoomStatus status);
 
-    // Query phức tạp 1: Tìm phòng trống trong khoảng thời gian
-    @Query("SELECT r FROM Room r WHERE r.id NOT IN (" +
-            "SELECT br.room.id FROM BookingRoom br " +
-            "WHERE br.booking.checkInDate < :checkOut " +
-            "AND br.booking.checkOutDate > :checkIn " +
-            "AND br.booking.status NOT IN ('CANCELLED', 'NO_SHOW')" +
-            ") AND r.status = 'AVAILABLE'")
-    List<Room> findAvailableRooms(
-            @Param("checkIn") LocalDate checkIn,
-            @Param("checkOut") LocalDate checkOut);
+        List<Room> findByRoomTypeId(Long roomTypeId);
 
-    // Query phức tạp 2: Thống kê phòng theo loại và trạng thái
-    @Query("SELECT r.roomType.typeName, r.status, COUNT(r) " +
-            "FROM Room r " +
-            "GROUP BY r.roomType.typeName, r.status " +
-            "ORDER BY r.roomType.typeName, r.status")
-    List<Object[]> getRoomStatistics();
+        /**
+         * Tìm các phòng AVAILABLE (không bị đặt) trong khoảng thời gian
+         * Phòng được coi là available nếu:
+         * 1. Status = AVAILABLE
+         * 2. KHÔNG có booking nào trong khoảng thời gian (checkIn -> checkOut)
+         * với status IN (CONFIRMED, CHECKED_IN, PENDING)
+         */
+        @Query("SELECT r FROM Room r WHERE r.status = 'AVAILABLE' " +
+                        "AND r.id NOT IN (" +
+                        "  SELECT b.room.id FROM Booking b " +
+                        "  WHERE b.status IN ('CONFIRMED', 'CHECKED_IN', 'PENDING') " +
+                        "  AND (" +
+                        "    (b.checkInDate <= :checkOutDate AND b.checkOutDate >= :checkInDate)" +
+                        "  )" +
+                        ")")
+        List<Room> findAvailableRooms(
+                        @Param("checkInDate") LocalDate checkInDate,
+                        @Param("checkOutDate") LocalDate checkOutDate);
 
-    // Query phức tạp 3: Tìm phòng theo nhiều tiêu chí
-    @Query("SELECT r FROM Room r " +
-            "WHERE (:typeId IS NULL OR r.roomType.id = :typeId) " +
-            "AND (:floor IS NULL OR r.floorNumber = :floor) " +
-            "AND (:minRating IS NULL OR r.rating >= :minRating) " +
-            "AND r.status = 'AVAILABLE'")
-    List<Room> searchRooms(
-            @Param("typeId") Long typeId,
-            @Param("floor") Integer floor,
-            @Param("minRating") Double minRating);
+        /**
+         * Tìm phòng available với các filter
+         */
+        @Query("SELECT r FROM Room r WHERE r.status = 'AVAILABLE' " +
+                        "AND (:roomTypeId IS NULL OR r.roomType.id = :roomTypeId) " +
+                        "AND (:minPrice IS NULL OR r.currentPrice >= :minPrice) " +
+                        "AND (:maxPrice IS NULL OR r.currentPrice <= :maxPrice) " +
+                        "AND (:isSmoking IS NULL OR r.isSmoking = :isSmoking) " +
+                        "AND (:hasBalcony IS NULL OR r.hasBalcony = :hasBalcony) " +
+                        "AND (:floorNumber IS NULL OR r.floorNumber = :floorNumber) " +
+                        "AND r.id NOT IN (" +
+                        "  SELECT b.room.id FROM Booking b " +
+                        "  WHERE b.status IN ('CONFIRMED', 'CHECKED_IN', 'PENDING') " +
+                        "  AND (" +
+                        "    (b.checkInDate <= :checkOutDate AND b.checkOutDate >= :checkInDate)" +
+                        "  )" +
+                        ")")
+        List<Room> searchAvailableRooms(
+                        @Param("checkInDate") LocalDate checkInDate,
+                        @Param("checkOutDate") LocalDate checkOutDate,
+                        @Param("roomTypeId") Long roomTypeId,
+                        @Param("minPrice") BigDecimal minPrice,
+                        @Param("maxPrice") BigDecimal maxPrice,
+                        @Param("isSmoking") Boolean isSmoking,
+                        @Param("hasBalcony") Boolean hasBalcony,
+                        @Param("floorNumber") Integer floorNumber);
 
-    // Query phức tạp 4: Top phòng được đặt nhiều nhất
-    @Query("SELECT r, COUNT(br) as bookingCount " +
-            "FROM Room r " +
-            "JOIN BookingRoom br ON br.room.id = r.id " +
-            "GROUP BY r.id, r.roomNumber, r.roomType, r.floorNumber, r.viewDescription, " +
-            "r.currentPrice, r.status, r.isSmoking, r.hasBalcony, r.rating, r.totalReviews " +
-            "ORDER BY bookingCount DESC")
-    List<Object[]> getTopBookedRooms();
-
-    // Query phức tạp 5: Phòng theo mức giá
-    @Query("SELECT " +
-            "CASE " +
-            "  WHEN r.currentPrice < 500000 THEN 'Dưới 500k' " +
-            "  WHEN r.currentPrice < 1000000 THEN '500k-1tr' " +
-            "  WHEN r.currentPrice < 2000000 THEN '1tr-2tr' " +
-            "  ELSE 'Trên 2tr' " +
-            "END as priceRange, " +
-            "COUNT(r) as roomCount " +
-            "FROM Room r " +
-            "WHERE r.status = 'AVAILABLE' " +
-            "GROUP BY priceRange " +
-            "ORDER BY MIN(r.currentPrice)")
-    List<Object[]> getRoomsByPriceRange();
-
-    // Query phức tạp 6: Phòng có rating cao theo loại
-    @Query("SELECT r.roomType.typeName, AVG(r.rating), COUNT(r) " +
-            "FROM Room r " +
-            "WHERE r.rating IS NOT NULL " +
-            "GROUP BY r.roomType.typeName " +
-            "HAVING AVG(r.rating) > :minAvgRating " +
-            "ORDER BY AVG(r.rating) DESC")
-    List<Object[]> getRoomTypesByRating(@Param("minAvgRating") Double minAvgRating);
-
-    // Query phức tạp 7: Phòng chưa được đặt trong khoảng thời gian
-    @Query("SELECT r FROM Room r " +
-            "WHERE r.id NOT IN (" +
-            "  SELECT DISTINCT br.room.id " +
-            "  FROM BookingRoom br " +
-            "  WHERE br.booking.checkInDate BETWEEN :startDate AND :endDate" +
-            ") " +
-            "AND r.status = 'AVAILABLE' " +
-            "ORDER BY r.roomNumber")
-    List<Room> findUnbookedRoomsInPeriod(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate);
-
-    // Query phức tạp 8: Thống kê chi tiết phòng
-    @Query("SELECT r.floorNumber, " +
-            "COUNT(r) as totalRooms, " +
-            "SUM(CASE WHEN r.status = 'AVAILABLE' THEN 1 ELSE 0 END) as availableRooms, " +
-            "AVG(r.currentPrice) as avgPrice " +
-            "FROM Room r " +
-            "GROUP BY r.floorNumber " +
-            "ORDER BY r.floorNumber")
-    List<Object[]> getFloorStatistics();
+        /**
+         * Kiểm tra xem phòng có available trong khoảng thời gian không
+         */
+        @Query("SELECT CASE WHEN COUNT(b) > 0 THEN false ELSE true END " +
+                        "FROM Booking b " +
+                        "WHERE b.room.id = :roomId " +
+                        "AND b.status IN ('CONFIRMED', 'CHECKED_IN', 'PENDING') " +
+                        "AND (" +
+                        "  (b.checkInDate <= :checkOutDate AND b.checkOutDate >= :checkInDate)" +
+                        ")")
+        boolean isRoomAvailable(
+                        @Param("roomId") Long roomId,
+                        @Param("checkInDate") LocalDate checkInDate,
+                        @Param("checkOutDate") LocalDate checkOutDate);
 }

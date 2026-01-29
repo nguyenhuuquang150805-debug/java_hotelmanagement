@@ -10,7 +10,10 @@ import com.nguyenhuuquang.hotelmanagement.entity.RoomType;
 
 @Repository
 public interface RoomTypeRepository extends JpaRepository<RoomType, Long> {
-    Optional<RoomType> findByTypeName(String typeName);
+
+    Optional<RoomType> findByName(String name);
+
+    boolean existsByName(String name);
 
     List<RoomType> findByIsActive(Boolean isActive);
 }

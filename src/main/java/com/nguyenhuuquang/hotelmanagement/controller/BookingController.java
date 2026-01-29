@@ -1,138 +1,131 @@
 package com.nguyenhuuquang.hotelmanagement.controller;
 
-import java.time.LocalDate;
 import java.util.List;
-import java.util.stream.Collectors;
 
-import org.springframework.hateoas.CollectionModel;
-import org.springframework.hateoas.EntityModel;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nguyenhuuquang.hotelmanagement.dto.request.CreateBookingRequest;
 import com.nguyenhuuquang.hotelmanagement.entity.Booking;
+import com.nguyenhuuquang.hotelmanagement.entity.User;
 import com.nguyenhuuquang.hotelmanagement.entity.enums.BookingStatus;
+import com.nguyenhuuquang.hotelmanagement.repository.UserRepository;
 import com.nguyenhuuquang.hotelmanagement.service.BookingService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/bookings")
 @RequiredArgsConstructor
 public class BookingController {
+
     private final BookingService bookingService;
+    private final UserRepository userRepository;
 
-    private EntityModel<Booking> toModel(Booking booking) {
-        return EntityModel.of(booking,
-                linkTo(methodOn(BookingController.class).getBookingById(booking.getId())).withSelfRel(),
-                linkTo(methodOn(BookingController.class).getAllBookings()).withRel("all-bookings"),
-                linkTo(methodOn(BookingController.class).updateBookingStatus(booking.getId(), null))
-                        .withRel("update-status"));
-    }
-
+    /**
+     * Tạo booking mới (User authenticated)
+     */
     @PostMapping
-    public ResponseEntity<EntityModel<Booking>> createBooking(@RequestBody Booking booking) {
-        Booking created = bookingService.createBooking(booking);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toModel(created));
+    public ResponseEntity<Booking> createBooking(
+            @Valid @RequestBody CreateBookingRequest request,
+            Authentication authentication) {
+
+        // Lấy user từ authentication
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Booking booking = bookingService.createBooking(request, user.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(booking);
     }
 
-    @PostMapping("/validated")
-    public ResponseEntity<EntityModel<Booking>> createBookingWithValidation(@RequestBody Booking booking) {
-        try {
-            Booking created = bookingService.createBookingWithValidation(booking);
-            return ResponseEntity.status(HttpStatus.CREATED).body(toModel(created));
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
+    /**
+     * Lấy booking theo ID
+     */
     @GetMapping("/{id}")
-    public ResponseEntity<EntityModel<Booking>> getBookingById(@PathVariable Long id) {
-        return bookingService.getBookingById(id)
-                .map(this::toModel)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Booking> getBookingById(@PathVariable Long id) {
+        Booking booking = bookingService.getBookingById(id);
+        return ResponseEntity.ok(booking);
     }
 
-    @GetMapping
-    public ResponseEntity<CollectionModel<EntityModel<Booking>>> getAllBookings() {
-        List<EntityModel<Booking>> bookings = bookingService.getAllBookings().stream()
-                .map(this::toModel)
-                .collect(Collectors.toList());
+    /**
+     * Lấy tất cả booking của user hiện tại
+     */
+    @GetMapping("/my-bookings")
+    public ResponseEntity<List<Booking>> getMyBookings(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return ResponseEntity.ok(CollectionModel.of(bookings,
-                linkTo(methodOn(BookingController.class).getAllBookings()).withSelfRel()));
+        List<Booking> bookings = bookingService.getUserBookings(user.getId());
+        return ResponseEntity.ok(bookings);
+    }
+
+    @GetMapping("/user/{userId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Booking>> getUserBookings(@PathVariable Long userId) {
+        List<Booking> bookings = bookingService.getUserBookings(userId);
+        return ResponseEntity.ok(bookings);
+    }
+
+    @GetMapping("/room/{roomId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<Booking>> getRoomBookings(@PathVariable Long roomId) {
+        List<Booking> bookings = bookingService.getRoomBookings(roomId);
+        return ResponseEntity.ok(bookings);
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<EntityModel<Booking>> updateBookingStatus(
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Booking> updateBookingStatus(
             @PathVariable Long id,
             @RequestParam BookingStatus status) {
-        Booking updated = bookingService.updateBookingStatus(id, status);
-        return ResponseEntity.ok(toModel(updated));
+        Booking booking = bookingService.updateBookingStatus(id, status);
+        return ResponseEntity.ok(booking);
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Booking> updateBooking(@PathVariable Long id, @RequestBody Booking booking) {
-        return ResponseEntity.ok(bookingService.updateBooking(id, booking));
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelBooking(
+            @PathVariable Long id,
+            @RequestParam(required = false) String reason,
+            Authentication authentication) {
+
+        Booking booking = bookingService.getBookingById(id);
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!booking.getUser().getId().equals(user.getId()) &&
+                !user.getRole().equals("ADMIN")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        bookingService.cancelBooking(id, reason);
+        return ResponseEntity.ok().build();
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteBooking(@PathVariable Long id) {
-        bookingService.deleteBooking(id);
-        return ResponseEntity.noContent().build();
+    @PatchMapping("/{id}/check-in")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Booking> checkIn(@PathVariable Long id) {
+        Booking booking = bookingService.checkIn(id);
+        return ResponseEntity.ok(booking);
     }
 
-    @GetMapping("/code/{code}")
-    public ResponseEntity<Booking> getBookingByCode(@PathVariable String code) {
-        return bookingService.getBookingByCode(code)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/customer/{customerId}")
-    public ResponseEntity<List<Booking>> getBookingsByCustomer(@PathVariable Long customerId) {
-        return ResponseEntity.ok(bookingService.getBookingsByCustomerId(customerId));
-    }
-
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<Booking>> getBookingsByStatus(@PathVariable BookingStatus status) {
-        return ResponseEntity.ok(bookingService.getBookingsByStatus(status));
-    }
-
-    @GetMapping("/date-range")
-    public ResponseEntity<List<Booking>> getBookingsByDateRange(
-            @RequestParam LocalDate start,
-            @RequestParam LocalDate end) {
-        return ResponseEntity.ok(bookingService.getBookingsByDateRange(start, end));
-    }
-
-    @GetMapping("/check-availability")
-    public ResponseEntity<Boolean> checkRoomAvailability(
-            @RequestParam Long roomId,
-            @RequestParam LocalDate checkIn,
-            @RequestParam LocalDate checkOut) {
-        boolean available = bookingService.checkRoomAvailability(roomId, checkIn, checkOut);
-        return ResponseEntity.ok(available);
-    }
-
-    @PostMapping("/check-rooms-availability")
-    public ResponseEntity<List<Long>> checkMultipleRoomsAvailability(
-            @RequestParam List<Long> roomIds,
-            @RequestParam LocalDate checkIn,
-            @RequestParam LocalDate checkOut) {
-        List<Long> occupiedRooms = bookingService.getOccupiedRoomIds(roomIds, checkIn, checkOut);
-        return ResponseEntity.ok(occupiedRooms);
+    @PatchMapping("/{id}/check-out")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Booking> checkOut(@PathVariable Long id) {
+        Booking booking = bookingService.checkOut(id);
+        return ResponseEntity.ok(booking);
     }
 }
